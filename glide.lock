@@ -1,0 +1,65 @@
+hash: 83077ebae3b240c22378d2576bfa48229b955c7a2b8ff88cf64e63a53cabff6b
+updated: 2017-07-20T13:38:29.779273+09:00
+imports:
+- name: github.com/aws/aws-sdk-go
+  version: c99278599107f124d9676c9023f9554261301e67
+  subpackages:
+  - aws
+  - aws/awserr
+  - aws/awsutil
+  - aws/client
+  - aws/client/metadata
+  - aws/corehandlers
+  - aws/credentials
+  - aws/credentials/ec2rolecreds
+  - aws/credentials/endpointcreds
+  - aws/credentials/stscreds
+  - aws/defaults
+  - aws/ec2metadata
+  - aws/endpoints
+  - aws/request
+  - aws/session
+  - aws/signer/v4
+  - internal/shareddefaults
+  - private/protocol
+  - private/protocol/query
+  - private/protocol/query/queryutil
+  - private/protocol/rest
+  - private/protocol/restxml
+  - private/protocol/xml/xmlutil
+  - service/s3
+  - service/sts
+- name: github.com/davecgh/go-spew
+  version: adab96458c51a58dc1783b3335dcce5461522e75
+  subpackages:
+  - spew
+- name: github.com/go-ini/ini
+  version: 3d73f4b845efdf9989fffd4b4e562727744a34ba
+- name: github.com/google/btree
+  version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
+- name: github.com/jessevdk/go-flags
+  version: 75a96bc41ad20ec6cef90037b017c7645bb1a3fe
+- name: github.com/jmespath/go-jmespath
+  version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
+- name: github.com/lestrrat/go-pdebug
+  version: 2e6eaaa5717f81bda41d27070d3c966f40a1e75f
+- name: github.com/mattn/go-runewidth
+  version: 97311d9f7767e3d6f422ea06661bc2c7a19e8a5d
+- name: github.com/nsf/termbox-go
+  version: 4ed959e0540971545eddb8c75514973d670cf739
+- name: github.com/peco/peco
+  version: 7b7749376ff732b10c2a2f70252dad41081ca23a
+  subpackages:
+  - filter
+  - hub
+  - internal/buffer
+  - internal/keyseq
+  - internal/util
+  - line
+  - pipeline
+  - sig
+- name: github.com/pkg/errors
+  version: c605e284fe17294bda444b34710735b29d1a9d90
+- name: github.com/ysugimoto/pecolify
+  version: ec6e58d8c222a332f056bd1a6e8515dabc2ac308
+testImports: []
