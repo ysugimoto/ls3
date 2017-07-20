@@ -45,10 +45,11 @@ func init() {
 // show usage
 func showUsage() {
 	help := `========================================================================
-ls3 : CLI AWS S3 file explorer
-=======================================================================
+ls3 : AWS S3 file explorer on CLI
+========================================================================
 Usage:
   ls3 [options]
+
 Options:
   -profile [profile name] : Use profile name which is written in ~/.aws/credentials
                             If not supplied, use default profile
