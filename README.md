@@ -36,7 +36,7 @@ Options:
 
 ## Author
 
-Yoshiaki Sugimoot <sugimoto@wnotes.net>
+Yoshiaki Sugimoto <sugimoto@wnotes.net>
 
 ## License
 
