@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
+
+	"io/ioutil"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -15,22 +16,37 @@ import (
 	"github.com/ysugimoto/pecolify"
 )
 
-const UTC_LAYOUT = "2016-01-02 15:03:04 -700 MST"
-
+// CLI option value struct
 type CLI struct {
+	// Initial bucket name
+	bucket string
+
+	// Using profile name
 	profile string
-	region  string
-	env     bool
-	help    bool
+
+	// Determine region
+	region string
+
+	// Using profile from environment
+	env bool
+
+	// Show help
+	help bool
 }
 
 var cli CLI = CLI{}
 var service *s3.S3
 var p = pecolify.New()
-var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
+var mimeTypeList = map[string]struct{}{
+	"text/plain":             struct{}{},
+	"text/html":              struct{}{},
+	"text/css":               struct{}{},
+	"application/javascript": struct{}{},
+}
 
 // init() for parsing command line args
 func init() {
+	flag.StringVar(&cli.bucket, "bucket", "", "Using bucket name")
 	flag.StringVar(&cli.profile, "profile", "", "Use profile name")
 	flag.BoolVar(&cli.env, "env", false, "Use credentials from environment")
 	flag.StringVar(&cli.region, "region", "", "region name")
@@ -56,14 +72,40 @@ Options:
                             If not supplied, use default profile
   -env                    : Use credentials from environment variable
                             You need to export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+  -bucket                 : Initial bucket name
   -region [region name]   : Determine region (default: ap-northeast-1)
   -help                   : Show this help
 `
 	fmt.Println(help)
 }
 
+// Main function
+func main() {
+	sess := session.Must(session.NewSession())
+	var conf *aws.Config
+	if cli.env {
+		conf = configFromEnv(cli.region)
+	} else {
+		conf = configFromProfile(cli.profile, cli.region)
+	}
+
+	service = s3.New(sess, conf)
+	var bucket string
+	var err error
+	if cli.bucket != "" {
+		bucket = cli.bucket
+	} else {
+		bucket, err = chooseBuckets()
+		if err != nil {
+			return
+		}
+	}
+	fmt.Printf("Retriving %s bucket...\n", bucket)
+	chooseObjects(bucket, []string{})
+}
+
 // Create aws.Config from profile
-func ConfigFromProfile(profileName, region string) *aws.Config {
+func configFromProfile(profileName, region string) *aws.Config {
 	if region == "" {
 		region = "ap-northeast-1"
 	}
@@ -77,7 +119,7 @@ func ConfigFromProfile(profileName, region string) *aws.Config {
 }
 
 // Create aws.Config from environment
-func ConfigFromEnv(region string) *aws.Config {
+func configFromEnv(region string) *aws.Config {
 	if region == "" {
 		region = "ap-northeast-1"
 	}
@@ -86,25 +128,7 @@ func ConfigFromEnv(region string) *aws.Config {
 		WithRegion(region)
 }
 
-// Main function
-func main() {
-	sess := session.Must(session.NewSession())
-	var conf *aws.Config
-	if cli.env {
-		conf = ConfigFromEnv(cli.region)
-	} else {
-		conf = ConfigFromProfile(cli.profile, cli.region)
-	}
-
-	service = s3.New(sess, conf)
-	bucket, err := chooseBuckets()
-	if err != nil {
-		return
-	}
-	fmt.Printf("Retriving %s bucket...\n", bucket)
-	chooseObjects(bucket, []string{})
-}
-
+// Choose bucket from list
 func chooseBuckets() (string, error) {
 	result, err := service.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -135,11 +159,12 @@ func chooseObjects(bucket string, prefix []string) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	objects := formatObjectList(result.Contents, prefix)
-	selected, err := p.Transform(objects)
+
+	selected, err := p.Transform(formatObjectList(result.Contents, prefix))
 	if err != nil {
 		return
 	}
+
 	if selected == "../" {
 		if len(prefix) > 0 {
 			prefix = prefix[0 : len(prefix)-1]
@@ -165,43 +190,62 @@ func chooseObjects(bucket string, prefix []string) {
 
 // Display object info for slected object
 func displayObjectActions(bucket string, prefix []string, object string) bool {
-	input := &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(fmt.Sprintf("%s/%s", strings.Join(prefix, "/"), object)),
+	dir := ""
+	if len(prefix) > 0 {
+		dir = strings.Join(prefix, "/") + "/"
 	}
-	result, err := service.GetObject(input)
+
+	result, err := service.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(fmt.Sprintf("%s%s", dir, object)),
+	})
 	if err != nil {
 		panic(err)
 	}
-	jst, _ := utcToJst(*result.LastModified)
 	fmt.Println(strings.Repeat("=", 60))
-	if len(prefix) > 0 {
-		fmt.Printf("%-16s: s3://%s/%s\n", "Location", bucket, object)
-	} else {
-		fmt.Printf("%-16s: s3://%s/%s/%s\n", "Location", bucket, strings.Join(prefix, "/"), object)
-	}
-	fmt.Printf("%-16s: %s\n", "ContentType", *result.ContentType)
-	fmt.Printf("%-16s: %d\n", "FileSize", *result.ContentLength)
-	fmt.Printf("%-16s: %s\n", "LastModified", jst)
+	fmt.Printf("%-16s: s3://%s/%s%s\n", "S3 Location", bucket, dir, object)
+	fmt.Printf("%-16s: %s\n", "Content Type", *result.ContentType)
+	fmt.Printf("%-16s: %d\n", "File Size", *result.ContentLength)
+	fmt.Printf("%-16s: %s\n", "Last Modified", utcToJst(*result.LastModified))
 	fmt.Println("")
-	return acceptAction(result)
+	return objectAction(result, object)
 }
 
-func acceptAction(result *s3.GetObjectOutput) bool {
-	ct := *result.ContentType
-	fmt.Print("Actions? [d:Download")
-	if strings.HasPrefix(ct, "text/") || strings.HasPrefix(ct, "application/") {
-		fmt.Print(", v:View")
-	}
-	fmt.Print(", b:Back to list]: ")
+// Display object info and select action
+func objectAction(result *s3.GetObjectOutput, object string) bool {
 	var cmd string
+	line := "Actions? [d:Download"
+	ct := *result.ContentType
+	_, isTextMime := mimeTypeList[ct]
+	if isTextMime {
+		line += ", v:View"
+	}
+	line = line + ", b:Back to list]: "
+	fmt.Print(line)
 	fmt.Scanf("%s", &cmd)
+
 	switch cmd {
 	case "d":
-		fmt.Println("Download")
-		return true
+		fmt.Printf("Downloading %s...", object)
+		buf, err := ioutil.ReadAll(result.Body)
+		if err != nil {
+			fmt.Println(err)
+			return false
+		}
+		var cwd string
+		cwd, err = os.Getwd()
+		if err != nil {
+			fmt.Println(err)
+			return false
+		}
+		if err := ioutil.WriteFile(fmt.Sprintf("%s/%s", cwd, object), buf, 0644); err != nil {
+			fmt.Println(err)
+			return true
+		}
+		fmt.Println("Download completed")
+		return false
 	case "v":
-		if strings.HasPrefix(ct, "text/") || strings.HasPrefix(ct, "application/") {
+		if isTextMime {
 			if buf, err := ioutil.ReadAll(result.Body); err != nil {
 				fmt.Println(err)
 			} else {
@@ -216,18 +260,18 @@ func acceptAction(result *s3.GetObjectOutput) bool {
 		return false
 	default:
 		fmt.Println("Invalid command")
-		return acceptAction(result)
+		return objectAction(result, object)
 	}
 }
 
 // Fromat object list from S3 response
 func formatObjectList(result []*s3.Object, prefix []string) (objects []string) {
-	objects = append(objects, "../")
-	unique := map[string]struct{}{}
 	var rep string
 	if len(prefix) > 0 {
 		rep = strings.Join(prefix, "/") + "/"
 	}
+	objects = append(objects, "../")
+	unique := map[string]struct{}{}
 	for i := 0; i < len(result); i++ {
 		isDir := false
 		key := *result[i].Key
@@ -243,11 +287,7 @@ func formatObjectList(result []*s3.Object, prefix []string) (objects []string) {
 			key = spl[0] + "/"
 			isDir = true
 		}
-		jst, err := utcToJst(lastModified)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
+		jst := utcToJst(lastModified)
 		if isDir {
 			objects = append(objects, fmt.Sprintf("%s %10s  %s", jst, "-", key))
 		} else {
@@ -257,8 +297,11 @@ func formatObjectList(result []*s3.Object, prefix []string) (objects []string) {
 	return
 }
 
+// We're living in Asia/Tokyo location :)
+var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
+
 // Transform from UTC to JST
-func utcToJst(utc time.Time) (string, error) {
+func utcToJst(utc time.Time) string {
 	jst := utc.In(JST)
-	return jst.Format("2006-01-2 15:03:04"), nil
+	return jst.Format("2006-01-2 15:03:04")
 }

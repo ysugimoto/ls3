@@ -1,8 +1,8 @@
 hash: 83077ebae3b240c22378d2576bfa48229b955c7a2b8ff88cf64e63a53cabff6b
-updated: 2017-07-20T13:38:29.779273+09:00
+updated: 2017-07-22T00:49:46.465614974+09:00
 imports:
 - name: github.com/aws/aws-sdk-go
-  version: c99278599107f124d9676c9023f9554261301e67
+  version: 0aadb9eb466100e809d0d6772d3698d07902c695
   subpackages:
   - aws
   - aws/awserr
@@ -38,7 +38,7 @@ imports:
 - name: github.com/google/btree
   version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
 - name: github.com/jessevdk/go-flags
-  version: 75a96bc41ad20ec6cef90037b017c7645bb1a3fe
+  version: 96dc06278ce32a0e9d957d590bb987c81ee66407
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
 - name: github.com/lestrrat/go-pdebug
@@ -61,5 +61,5 @@ imports:
 - name: github.com/pkg/errors
   version: c605e284fe17294bda444b34710735b29d1a9d90
 - name: github.com/ysugimoto/pecolify
-  version: ec6e58d8c222a332f056bd1a6e8515dabc2ac308
+  version: 96920dd53f777525131b83a6c508c1c6c567e1c3
 testImports: []
