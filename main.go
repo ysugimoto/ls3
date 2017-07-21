@@ -137,14 +137,14 @@ func chooseBuckets() (string, error) {
 	buckets := []string{}
 	for i := 0; i < len(result.Buckets); i++ {
 		name := *result.Buckets[i].Name
-		buckets = append(buckets, name)
+		buckets = append(buckets, fmt.Sprintf("[Bucket] %s", name))
 	}
 
 	selected, err := p.Transform(buckets)
 	if err != nil {
 		return "", err
 	}
-	return selected, nil
+	return selected[9:], nil
 }
 
 // Choose from object list
@@ -303,5 +303,5 @@ var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
 // Transform from UTC to JST
 func utcToJst(utc time.Time) string {
 	jst := utc.In(JST)
-	return jst.Format("2006-01-2 15:03:04")
+	return jst.Format("2006-01-02 15:03:04")
 }
