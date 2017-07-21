@@ -30,6 +30,7 @@ Options:
                             If not supplied, use default profile
   -env                    : Use credentials from environment variable
                             You need to export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+  -bucket                 : Initial bucket name
   -region [region name]   : Determine region (default: ap-northeast-1)
   -help                   : Show this help
 ```
