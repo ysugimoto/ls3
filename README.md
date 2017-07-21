@@ -35,6 +35,8 @@ Options:
   -help                   : Show this help
 ```
 
+This tool can explore object file for drill-down and view (text file only) or download object.
+
 ## Author
 
 Yoshiaki Sugimoto <sugimoto@wnotes.net>
