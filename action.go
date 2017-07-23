@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"io/ioutil"
 
@@ -21,6 +20,7 @@ var mimeTypeList = map[string]int{
 
 type Action struct {
 	object *s3.GetObjectOutput
+	status *Status
 	name   string
 	offset int
 }
@@ -30,11 +30,13 @@ func NewAction(object *s3.GetObjectOutput, objectName string, offset int) *Actio
 		object: object,
 		name:   objectName,
 		offset: offset,
+		status: NewStatus(1),
 	}
 }
 
 func (a *Action) Do() (bool, error) {
 	pointer := a.displayObjectInfo()
+	a.status.Message("Choose Action for this file", 0)
 	var act ObjectAction
 	for {
 		var err error
@@ -59,10 +61,9 @@ func (a *Action) displayObjectInfo() int {
 	infoList := []string{
 		fmt.Sprint(strings.Repeat("=", 60)),
 		fmt.Sprintf("%-16s: %s\n", "Content Type", *a.object.ContentType),
-		fmt.Sprintf("%-16s: %d\n", "File Size", *a.object.ContentLength),
+		fmt.Sprintf("%-16s: %d (bytes)\n", "File Size", *a.object.ContentLength),
 		fmt.Sprintf("%-16s: %s\n", "Last Modified", utcToJst(*a.object.LastModified)),
 		"",
-		"Choose Action for this file:",
 	}
 	for _, info := range infoList {
 		for i, r := range []rune(info) {
@@ -75,21 +76,17 @@ func (a *Action) displayObjectInfo() int {
 
 func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
 	back := ActionCommand{op: Back, name: "Back To List"}
-	view := ActionCommand{op: View, name: "View file content"}
+	// view := ActionCommand{op: View, name: "View file content"}
 	download := ActionCommand{op: Download, name: "Download this file"}
 
-	actions := []ActionCommand{back}
-	selects := Selectable{back}
-
-	if _, ok := mimeTypeList[*a.object.ContentType]; ok {
-		actions = append(actions, view)
-		selects = append(selects, view)
-	}
+	actions := ActionList{back}
+	// if _, ok := mimeTypeList[*a.object.ContentType]; ok {
+	// 	actions = append(actions, view)
+	// }
 	actions = append(actions, download)
-	selects = append(selects, download)
 
-	selector := NewSelector(pointer)
-	action, err := selector.Choose(selects)
+	selector := NewSelector(pointer).WithNoFilter()
+	action, err := selector.Choose(actions.Selectable())
 	if err != nil {
 		return None, err
 	}
@@ -109,14 +106,7 @@ func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
 }
 
 func (a *Action) doDownload() (bool, error) {
-	width, height := termbox.Size()
-	state := []rune(fmt.Sprintf("Downloading %s ...", a.name))
-	for i, r := range state {
-		termbox.SetCell(i, height, r, termbox.ColorWhite, termbox.ColorCyan)
-	}
-	for i := len(state); i < width; i++ {
-		termbox.SetCell(i, height, rune(' '), termbox.ColorDefault, termbox.ColorCyan)
-	}
+	a.status.Info(fmt.Sprintf("Downloading %s ...", a.name), 0)
 
 	buffer, err := ioutil.ReadAll(a.object.Body)
 	if err != nil {
@@ -125,16 +115,11 @@ func (a *Action) doDownload() (bool, error) {
 	cwd, _ := os.Getwd()
 	writePath := fmt.Sprintf("%s/%s", cwd, a.name)
 	if err := ioutil.WriteFile(writePath, buffer, 0644); err != nil {
+		<-a.status.Error("Failed to download", 1)
 		return false, err
 	}
-LOOP:
-	for {
-		select {
-		case <-time.After(2 * time.Second):
-			break LOOP
-		}
-	}
-	return true, nil
+	<-a.status.Info("Downloaded completely!", 2)
+	return false, nil
 }
 
 func (a *Action) doView() (bool, error) {

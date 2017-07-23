@@ -13,6 +13,7 @@ type App struct {
 	prefix  []string
 	object  string
 	service *s3.S3
+	status  *Status
 }
 
 func NewApp(service *s3.S3, bucket string) (*App, error) {
@@ -23,6 +24,7 @@ func NewApp(service *s3.S3, bucket string) (*App, error) {
 		service: service,
 		bucket:  bucket,
 		prefix:  []string{},
+		status:  NewStatus(1),
 	}, nil
 }
 
@@ -31,6 +33,8 @@ func (a *App) Terminate() {
 }
 
 func (a *App) Run() error {
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	a.writeHeader()
 	if a.bucket == "" {
 		if err := a.chooseBuckets(); err != nil {
 			return err
@@ -53,34 +57,35 @@ func (a *App) writeHeader() {
 	if a.object != "" {
 		o = a.object
 	}
-	location := fmt.Sprintf("s3://%s%s%s", b, p, o)
+	location := fmt.Sprintf("Location: s3://%s%s%s", b, p, o)
 	for i, r := range []rune(location) {
-		termbox.SetCell(i, 0, r, termbox.ColorGreen, termbox.ColorDefault)
+		termbox.SetCell(i, 0, r, termbox.ColorGreen|termbox.AttrBold, termbox.ColorDefault)
 	}
 	termbox.Flush()
 }
 
 // Choose bucket from list
 func (a *App) chooseBuckets() error {
+	a.status.Message("Retrive bucket list...", 0)
 	result, err := a.service.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
 		return err
 	}
-	buckets := []*Bucket{}
-	selects := Selectable{}
+	buckets := Buckets{}
 	for _, b := range result.Buckets {
-		bucket := NewBucket(b)
-		buckets = append(buckets, bucket)
-		selects = append(selects, bucket)
+		buckets = append(buckets, NewBucket(b))
 	}
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
 
-	selector := NewSelector(1)
-	index, err := selector.Choose(selects)
+	a.status.Message("Choose bucket", 0)
+	selector := NewSelector(2)
+	index, err := selector.Choose(buckets.Selectable())
 	if err != nil {
+		a.status.Clear()
 		return err
 	}
+	a.status.Clear()
 	a.bucket = buckets[index].name
 	return nil
 }
@@ -93,25 +98,27 @@ func (a *App) chooseObject() error {
 	if len(a.prefix) > 0 {
 		input = input.SetPrefix(strings.Join(a.prefix, "/") + "/")
 	}
+	a.status.Message("Retrive object list...", 0)
 	result, err := a.service.ListObjects(input)
 	if err != nil {
 		return err
 	}
-	parent := NewParentObject()
-	objects := []*Object{parent}
-	selects := Selectable{parent}
+	objects := Objects{NewParentObject()}
 	for _, o := range a.formatObjects(result.Contents) {
 		objects = append(objects, o)
-		selects = append(selects, o)
 	}
 
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
-	selector := NewSelector(1)
-	index, err := selector.Choose(selects)
+
+	a.status.Message("Choose object", 0)
+	selector := NewSelector(2)
+	index, err := selector.Choose(objects.Selectable())
 	if err != nil {
+		a.status.Clear()
 		return err
 	}
+	a.status.Clear()
 	selected := objects[index]
 	switch {
 	case selected.key == "../":
@@ -154,7 +161,7 @@ func (a *App) objectAction() (bool, error) {
 
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
-	action := NewAction(result, a.object, 1)
+	action := NewAction(result, a.object, 2)
 	return action.Do()
 }
 

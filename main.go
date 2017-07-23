@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"io/ioutil"
 	"os/signal"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -38,7 +39,7 @@ func init() {
 	flag.StringVar(&cli.bucket, "bucket", "", "Using bucket name")
 	flag.StringVar(&cli.profile, "profile", "", "Use profile name")
 	flag.BoolVar(&cli.env, "env", false, "Use credentials from environment")
-	flag.StringVar(&cli.region, "region", "", "region name")
+	flag.StringVar(&cli.region, "region", "ap-northeast-1", "region name")
 	flag.BoolVar(&cli.help, "help", false, "show usage")
 	flag.Parse()
 
@@ -70,9 +71,6 @@ Options:
 
 // Create aws.Config from profile
 func configFromProfile(profileName, region string) *aws.Config {
-	if region == "" {
-		region = "ap-northeast-1"
-	}
 	provider := &credentials.SharedCredentialsProvider{
 		Profile: profileName,
 	}
@@ -84,9 +82,6 @@ func configFromProfile(profileName, region string) *aws.Config {
 
 // Create aws.Config from environment
 func configFromEnv(region string) *aws.Config {
-	if region == "" {
-		region = "ap-northeast-1"
-	}
 	return aws.NewConfig().
 		WithCredentials(credentials.NewEnvCredentials()).
 		WithRegion(region)
@@ -120,8 +115,18 @@ func main() {
 		}
 	}()
 
+	defer func() {
+		err := recover()
+		if err != nil {
+			ioutil.WriteFile("/tmp/app.log", []byte(fmt.Sprintf("%s", err)), 0644)
+			app.Terminate()
+			panic(err)
+		}
+	}()
+
 	if err := app.Run(); err != nil {
 		app.Terminate()
+		ioutil.WriteFile("/tmp/app.log", []byte(fmt.Sprintf("%s", err)), 0644)
 		os.Exit(1)
 	}
 	app.Terminate()
