@@ -1,8 +1,8 @@
-hash: 83077ebae3b240c22378d2576bfa48229b955c7a2b8ff88cf64e63a53cabff6b
-updated: 2017-07-22T00:49:46.465614974+09:00
+hash: f7d4ab329c7df9290d0c04931a059995eef40858ee6839cc72526f5c89ccfd53
+updated: 2017-07-24T14:48:15.93447974+09:00
 imports:
 - name: github.com/aws/aws-sdk-go
-  version: 0aadb9eb466100e809d0d6772d3698d07902c695
+  version: afd601335e2a72d43caa3af6bd2abe512fcc3bfd
   subpackages:
   - aws
   - aws/awserr
@@ -29,37 +29,12 @@ imports:
   - private/protocol/xml/xmlutil
   - service/s3
   - service/sts
-- name: github.com/davecgh/go-spew
-  version: adab96458c51a58dc1783b3335dcce5461522e75
-  subpackages:
-  - spew
 - name: github.com/go-ini/ini
   version: 3d73f4b845efdf9989fffd4b4e562727744a34ba
-- name: github.com/google/btree
-  version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
-- name: github.com/jessevdk/go-flags
-  version: 96dc06278ce32a0e9d957d590bb987c81ee66407
 - name: github.com/jmespath/go-jmespath
   version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
-- name: github.com/lestrrat/go-pdebug
-  version: 2e6eaaa5717f81bda41d27070d3c966f40a1e75f
 - name: github.com/mattn/go-runewidth
-  version: 97311d9f7767e3d6f422ea06661bc2c7a19e8a5d
+  version: 9e777a8366cce605130a531d2cd6363d07ad7317
 - name: github.com/nsf/termbox-go
   version: 4ed959e0540971545eddb8c75514973d670cf739
-- name: github.com/peco/peco
-  version: 7b7749376ff732b10c2a2f70252dad41081ca23a
-  subpackages:
-  - filter
-  - hub
-  - internal/buffer
-  - internal/keyseq
-  - internal/util
-  - line
-  - pipeline
-  - sig
-- name: github.com/pkg/errors
-  version: c605e284fe17294bda444b34710735b29d1a9d90
-- name: github.com/ysugimoto/pecolify
-  version: 96920dd53f777525131b83a6c508c1c6c567e1c3
 testImports: []
