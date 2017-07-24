@@ -9,7 +9,7 @@ before_install:
   - sudo apt-get install -y glide
 
 install:
-  - glide get
+  - glide up
 
 script:
   - make
