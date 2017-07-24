@@ -8,14 +8,26 @@ import (
 	"strings"
 )
 
+// Terminal application struct
 type App struct {
-	bucket  string
-	prefix  []string
-	object  string
+
+	// Bucket name
+	bucket string
+
+	// Object prefixes
+	prefix []string
+
+	// Selected object name
+	object string
+
+	// S3 service instance
 	service *s3.S3
-	status  *Status
+
+	// Status writer
+	status *Status
 }
 
+// Create new application
 func NewApp(service *s3.S3, bucket string) (*App, error) {
 	if err := termbox.Init(); err != nil {
 		return nil, err
@@ -28,13 +40,16 @@ func NewApp(service *s3.S3, bucket string) (*App, error) {
 	}, nil
 }
 
+// Terminate application
 func (a *App) Terminate() {
 	termbox.Close()
 }
 
+// Run application
 func (a *App) Run() error {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
+
 	if a.bucket == "" {
 		if err := a.chooseBuckets(); err != nil {
 			return err
@@ -43,9 +58,12 @@ func (a *App) Run() error {
 	if err := a.chooseObject(); err != nil {
 		return err
 	}
+
+	// successfully ended application
 	return nil
 }
 
+// Write application header
 func (a *App) writeHeader() {
 	var b, p, o string
 	if a.bucket != "" {
@@ -104,7 +122,7 @@ func (a *App) chooseObject() error {
 		return err
 	}
 	objects := Objects{NewParentObject()}
-	for _, o := range a.formatObjects(result.Contents) {
+	for _, o := range formatObjects(result.Contents, a.prefix) {
 		objects = append(objects, o)
 	}
 
@@ -145,6 +163,7 @@ func (a *App) chooseObject() error {
 	return a.chooseObject()
 }
 
+// Display action for object
 func (a *App) objectAction() (bool, error) {
 	dir := ""
 	if len(a.prefix) > 0 {
@@ -165,16 +184,19 @@ func (a *App) objectAction() (bool, error) {
 	return action.Do()
 }
 
-func (a *App) formatObjects(s3Objects []*s3.Object) []*Object {
+// Filter and format object list
+func formatObjects(s3Objects []*s3.Object, prefix []string) []*Object {
 	replace := ""
-	if len(a.prefix) > 0 {
-		replace = strings.Join(a.prefix, "/") + "/"
+	if len(prefix) > 0 {
+		replace = strings.Join(prefix, "/") + "/"
 	}
 	objects := []*Object{}
 	unique := map[string]struct{}{}
 	for _, o := range s3Objects {
 		isDir := false
 		key := strings.Replace(*o.Key, replace, "", 1)
+
+		// If key contains "/", we deal with it as directory
 		if strings.Contains(key, "/") {
 			parts := strings.Split(key, "/")
 			if _, exist := unique[parts[0]]; exist {

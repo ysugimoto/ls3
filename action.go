@@ -11,6 +11,7 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
+// Enable to view file content MimeTypes
 var mimeTypeList = map[string]int{
 	"text/plain":             1,
 	"text/html":              1,
@@ -18,13 +19,23 @@ var mimeTypeList = map[string]int{
 	"application/javascript": 1,
 }
 
+// Action for S3 object
 type Action struct {
+
+	// object which returns S3 API
 	object *s3.GetObjectOutput
+
+	// Status Writer
 	status *Status
-	name   string
+
+	// Object name
+	name string
+
+	// row offset for termbox
 	offset int
 }
 
+// Create Action pointer
 func NewAction(object *s3.GetObjectOutput, objectName string, offset int) *Action {
 	return &Action{
 		object: object,
@@ -34,6 +45,7 @@ func NewAction(object *s3.GetObjectOutput, objectName string, offset int) *Actio
 	}
 }
 
+// Do action
 func (a *Action) Do() (bool, error) {
 	pointer := a.displayObjectInfo()
 	a.status.Message("Choose Action for this file", 0)
@@ -50,15 +62,18 @@ func (a *Action) Do() (bool, error) {
 	case Download:
 		return a.doDownload()
 	case View:
-		return a.doView()
+		break
+		// return a.doView()
 	case Back, None:
 	}
 	return false, nil
 }
 
-func (a *Action) displayObjectInfo() int {
-	pointer := a.offset
+// Display object info
+func (a *Action) displayObjectInfo() (pointer int) {
+	pointer = a.offset
 	infoList := []string{
+		"",
 		fmt.Sprint(strings.Repeat("=", 60)),
 		fmt.Sprintf("%-16s: %s\n", "Content Type", *a.object.ContentType),
 		fmt.Sprintf("%-16s: %d (bytes)\n", "File Size", *a.object.ContentLength),
@@ -71,9 +86,10 @@ func (a *Action) displayObjectInfo() int {
 		}
 		pointer++
 	}
-	return pointer
+	return
 }
 
+// Choose action for selected object
 func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
 	back := ActionCommand{op: Back, name: "Back To List"}
 	// view := ActionCommand{op: View, name: "View file content"}
@@ -85,7 +101,7 @@ func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
 	// }
 	actions = append(actions, download)
 
-	selector := NewSelector(pointer).WithNoFilter()
+	selector := NewSelector(pointer).WithOutFilter()
 	action, err := selector.Choose(actions.Selectable())
 	if err != nil {
 		return None, err
@@ -105,6 +121,7 @@ func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
 	}
 }
 
+// Download object to current working directory
 func (a *Action) doDownload() (bool, error) {
 	a.status.Info(fmt.Sprintf("Downloading %s ...", a.name), 0)
 
@@ -122,6 +139,7 @@ func (a *Action) doDownload() (bool, error) {
 	return false, nil
 }
 
-func (a *Action) doView() (bool, error) {
-	return true, nil
-}
+// Currently not implemented
+// func (a *Action) doView() (bool, error) {
+// 	return true, nil
+// }
