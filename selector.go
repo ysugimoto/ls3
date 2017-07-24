@@ -229,7 +229,6 @@ func (s *Selector) inactive(pointer int) {
 			continue
 		}
 		cell := cb[index+i]
-		cell.Fg = termbox.ColorWhite
 		cell.Bg = termbox.ColorDefault
 		cb[index+i] = cell
 	}
@@ -244,7 +243,6 @@ func (s *Selector) active(pointer int) {
 			continue
 		}
 		cell := cb[index+i]
-		cell.Fg = termbox.ColorWhite
 		cell.Bg = termbox.ColorMagenta
 		cb[index+i] = cell
 	}
