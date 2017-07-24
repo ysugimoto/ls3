@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"io/ioutil"
 	"os/signal"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -89,7 +88,6 @@ func configFromEnv(region string) *aws.Config {
 
 // Main function
 func main() {
-	sess := session.Must(session.NewSession())
 	var conf *aws.Config
 	if cli.env {
 		conf = configFromEnv(cli.region)
@@ -97,12 +95,13 @@ func main() {
 		conf = configFromProfile(cli.profile, cli.region)
 	}
 
-	service := s3.New(sess, conf)
+	service := s3.New(session.Must(session.NewSession()), conf)
 	app, err := NewApp(service, cli.bucket)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, os.Interrupt)
 	go func() {
@@ -118,7 +117,6 @@ func main() {
 	defer func() {
 		err := recover()
 		if err != nil {
-			ioutil.WriteFile("/tmp/app.log", []byte(fmt.Sprintf("%s", err)), 0644)
 			app.Terminate()
 			panic(err)
 		}
@@ -126,7 +124,6 @@ func main() {
 
 	if err := app.Run(); err != nil {
 		app.Terminate()
-		ioutil.WriteFile("/tmp/app.log", []byte(fmt.Sprintf("%s", err)), 0644)
 		os.Exit(1)
 	}
 	app.Terminate()

@@ -36,7 +36,7 @@ func NewSelector(rowOffset int) *Selector {
 	}
 }
 
-func (s *Selector) WithNoFilter() *Selector {
+func (s *Selector) WithOutFilter() *Selector {
 	s.enableFilter = false
 	return s
 }
