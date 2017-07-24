@@ -59,7 +59,7 @@ func (o *Object) String() string {
 }
 
 // Writer::Write implementation
-func (o *Object) Write(y int) {
+func (o *Object) Write(y int, filters []rune) {
 	i := 0
 	if o.parent {
 		for _, r := range []rune(o.key) {
@@ -77,7 +77,11 @@ func (o *Object) Write(y int) {
 		}
 		for _, r := range []rune(fmt.Sprintf("%s/", o.key)) {
 			size := runewidth.RuneWidth(r)
-			termbox.SetCell(i, y, r, termbox.ColorGreen|termbox.AttrBold, termbox.ColorDefault)
+			color := termbox.ColorGreen
+			if isRuneContains(filters, r) {
+				color = termbox.ColorYellow
+			}
+			termbox.SetCell(i, y, r, color|termbox.AttrBold, termbox.ColorDefault)
 			i += size
 		}
 	} else {
@@ -91,7 +95,11 @@ func (o *Object) Write(y int) {
 		}
 		for _, r := range []rune(fmt.Sprintf("%s", o.key)) {
 			size := runewidth.RuneWidth(r)
-			termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
+			color := termbox.ColorWhite
+			if isRuneContains(filters, r) {
+				color = termbox.ColorYellow
+			}
+			termbox.SetCell(i, y, r, color, termbox.ColorDefault)
 			i += size
 		}
 	}

@@ -30,7 +30,7 @@ func (b *Bucket) String() string {
 }
 
 // Writer::Write implementation
-func (b *Bucket) Write(y int) {
+func (b *Bucket) Write(y int, filters []rune) {
 	i := 0
 	for _, r := range []rune("[Bucket] ") {
 		termbox.SetCell(i, y, r, termbox.ColorCyan, termbox.ColorDefault)
@@ -38,7 +38,11 @@ func (b *Bucket) Write(y int) {
 	}
 	for _, r := range []rune(b.name) {
 		size := runewidth.RuneWidth(r)
-		termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
+		color := termbox.ColorWhite
+		if isRuneContains(filters, r) {
+			color = termbox.ColorYellow
+		}
+		termbox.SetCell(i, y, r, color, termbox.ColorDefault)
 		i += size
 	}
 }
