@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/nsf/termbox-go"
 	"time"
+
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/mattn/go-runewidth"
+	"github.com/nsf/termbox-go"
 )
 
 // We're living in Asia/Tokyo location :)
@@ -39,8 +41,9 @@ func (b *Bucket) Write(y int) {
 		i++
 	}
 	for _, r := range []rune(b.name) {
+		size := runewidth.RuneWidth(r)
 		termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
-		i++
+		i += size
 	}
 }
 
@@ -108,8 +111,9 @@ func (o *Object) Write(y int) {
 			i++
 		}
 		for _, r := range []rune(fmt.Sprintf("%s/", o.key)) {
+			size := runewidth.RuneWidth(r)
 			termbox.SetCell(i, y, r, termbox.ColorGreen|termbox.AttrBold, termbox.ColorDefault)
-			i++
+			i += size
 		}
 	} else {
 		for _, r := range []rune(utcToJst(o.lastModified)) {
@@ -121,8 +125,9 @@ func (o *Object) Write(y int) {
 			i++
 		}
 		for _, r := range []rune(fmt.Sprintf("%s", o.key)) {
+			size := runewidth.RuneWidth(r)
 			termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
-			i++
+			i += size
 		}
 	}
 }

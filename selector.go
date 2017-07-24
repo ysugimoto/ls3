@@ -195,20 +195,29 @@ func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) 
 	pointerFound := 0
 	for i, line := range displayList {
 		line.Write(i + s.offset)
-		// for j, r := range []rune(line.String()) {
-		// 	termbox.SetCell(j, i+s.offset, r, termbox.ColorDefault, termbox.ColorDefault)
-		// }
 		if pointer == i {
 			s.active(pointer)
 			pointerFound = pointer
 		}
 	}
+	s.displayInfo(len(displayList), page, maxPage)
 	termbox.Flush()
 	if s.enableFilter {
 		status := NewStatus(1)
 		status.Message(fmt.Sprintf("Filter query> %s", string(filters)), 0)
 	}
 	return len(displayList), page, maxPage, pointerFound
+}
+
+func (s *Selector) displayInfo(listLen, page, maxPage int) {
+	info := []rune(fmt.Sprintf("(Total %d: %d of %d)", listLen, page, maxPage))
+	w, _ := s.getSize()
+	x := w - len(info)
+
+	for _, r := range info {
+		termbox.SetCell(x, 0, r, termbox.ColorDefault, termbox.ColorDefault)
+		x++
+	}
 }
 
 func (s *Selector) Clear() {
