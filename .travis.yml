@@ -1,0 +1,8 @@
+language: go
+go:
+  - master
+before_install:
+  - curl https://glide.sh/get | sh
+  - cd $GOPATH/src/github.com/ysugimoto/ls3 && glide get
+script:
+  - cd $GOPATH/src/github.com/ysugimoto/ls3 && make
