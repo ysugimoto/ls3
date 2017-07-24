@@ -32,7 +32,7 @@ func (a ActionCommand) String() string {
 }
 
 // Writer::Writer implementation
-func (a ActionCommand) Write(y int) {
+func (a ActionCommand) Write(y int, filters []rune) {
 	for i, r := range []rune(a.name) {
 		termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
 	}

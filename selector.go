@@ -7,12 +7,6 @@ import (
 	"strings"
 )
 
-type Writer interface {
-	Write(y int)
-	String() string
-}
-type Selectable []Writer
-
 type Selector struct {
 	offset       int
 	enableFilter bool
@@ -194,7 +188,7 @@ func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) 
 	s.Clear()
 	pointerFound := 0
 	for i, line := range displayList {
-		line.Write(i + s.offset)
+		line.Write(i+s.offset, filters)
 		if pointer == i {
 			s.active(pointer)
 			pointerFound = pointer
