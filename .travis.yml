@@ -4,9 +4,9 @@ go:
   - 1.8
 
 before_install:
-  - add-apt-repository ppa:masterminds/glide
-  - apt-get update
-  - apt-get install glide
+  - sudo add-apt-repository ppa:masterminds/glide
+  - sudo apt-get update
+  - sudo apt-get install glide
 
 install:
   - glide get
