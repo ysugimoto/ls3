@@ -30,20 +30,21 @@ func (b *Bucket) String() string {
 }
 
 // Writer::Write implementation
-func (b *Bucket) Write(y int, filters []rune) {
+func (b *Bucket) Write(y int, filter string) {
 	i := 0
 	for _, r := range []rune("[Bucket] ") {
 		termbox.SetCell(i, y, r, termbox.ColorCyan, termbox.ColorDefault)
 		i++
 	}
-	for _, r := range []rune(b.name) {
-		size := runewidth.RuneWidth(r)
+
+	first, last := findHighlightRange(b.name, filter)
+	for j, r := range []rune(b.name) {
 		color := termbox.ColorWhite
-		if isRuneContains(filters, r) {
+		if j >= first && j < last {
 			color = termbox.ColorYellow
 		}
 		termbox.SetCell(i, y, r, color, termbox.ColorDefault)
-		i += size
+		i += runewidth.RuneWidth(r)
 	}
 }
 

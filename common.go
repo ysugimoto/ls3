@@ -1,12 +1,13 @@
 package main
 
 import (
+	"strings"
 	"time"
 )
 
 // Writer interface for selectable
 type Writer interface {
-	Write(y int, filters []rune)
+	Write(y int, filter string)
 	String() string
 }
 
@@ -22,13 +23,20 @@ func utcToJst(utc time.Time) string {
 	return jst.Format("2006-01-02 15:03:04")
 }
 
-// Check rune contains in rune slice
-func isRuneContains(haystack []rune, needle rune) (contains bool) {
-	for _, r := range haystack {
-		if r == needle {
-			contains = true
-			break
-		}
+// Find and get highlight range
+func findHighlightRange(haystack, needle string) (first, last int) {
+	if needle == "" {
+		first = -1
+		last = -1
+		return
 	}
+
+	first = strings.Index(haystack, needle)
+	if first == -1 {
+		last = -1
+		return
+	}
+	last = first + len(needle)
+
 	return
 }

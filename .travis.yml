@@ -12,4 +12,5 @@ install:
   - glide up
 
 script:
+  - go test
   - make

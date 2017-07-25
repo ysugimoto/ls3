@@ -59,7 +59,7 @@ func (o *Object) String() string {
 }
 
 // Writer::Write implementation
-func (o *Object) Write(y int, filters []rune) {
+func (o *Object) Write(y int, filter string) {
 	i := 0
 	if o.parent {
 		for _, r := range []rune(o.key) {
@@ -75,14 +75,15 @@ func (o *Object) Write(y int, filters []rune) {
 			termbox.SetCell(i, y, r, termbox.ColorCyan, termbox.ColorDefault)
 			i++
 		}
-		for _, r := range []rune(fmt.Sprintf("%s/", o.key)) {
-			size := runewidth.RuneWidth(r)
+
+		first, last := findHighlightRange(o.key, filter)
+		for j, r := range []rune(fmt.Sprintf("%s/", o.key)) {
 			color := termbox.ColorGreen
-			if isRuneContains(filters, r) {
+			if j >= first && j < last {
 				color = termbox.ColorYellow
 			}
 			termbox.SetCell(i, y, r, color|termbox.AttrBold, termbox.ColorDefault)
-			i += size
+			i += runewidth.RuneWidth(r)
 		}
 	} else {
 		for _, r := range []rune(utcToJst(o.lastModified)) {
@@ -93,14 +94,15 @@ func (o *Object) Write(y int, filters []rune) {
 			termbox.SetCell(i, y, r, termbox.ColorCyan, termbox.ColorDefault)
 			i++
 		}
-		for _, r := range []rune(fmt.Sprintf("%s", o.key)) {
-			size := runewidth.RuneWidth(r)
+
+		first, last := findHighlightRange(o.key, filter)
+		for j, r := range []rune(fmt.Sprintf("%s", o.key)) {
 			color := termbox.ColorWhite
-			if isRuneContains(filters, r) {
+			if j >= first && j < last {
 				color = termbox.ColorYellow
 			}
 			termbox.SetCell(i, y, r, color, termbox.ColorDefault)
-			i += size
+			i += runewidth.RuneWidth(r)
 		}
 	}
 }

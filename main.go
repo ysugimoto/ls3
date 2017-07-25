@@ -88,6 +88,7 @@ func configFromEnv(region string) *aws.Config {
 
 // Main function
 func main() {
+	defer logger.Close()
 	var conf *aws.Config
 	if cli.env {
 		conf = configFromEnv(cli.region)
@@ -111,14 +112,6 @@ func main() {
 				app.Terminate()
 				os.Exit(1)
 			}
-		}
-	}()
-
-	defer func() {
-		err := recover()
-		if err != nil {
-			app.Terminate()
-			panic(err)
 		}
 	}()
 
