@@ -60,30 +60,28 @@ func (a *App) Run() error {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
 	stop := make(chan struct{}, 1)
-	defer func() {
-		stop <- struct{}{}
-	}()
 	go a.eventLoop(stop)
 
 	if a.bucket == "" {
 		if err := a.chooseBuckets(); err != nil {
+			stop <- struct{}{}
 			return err
 		}
 	}
 	if err := a.chooseObject(); err != nil {
+		stop <- struct{}{}
 		return err
 	}
 
 	// successfully ended application
+	stop <- struct{}{}
 	return nil
 }
 
 func (a *App) eventLoop(stop chan struct{}) {
-	for {
-		select {
-		case <-stop:
-			return
-		case evt := <-a.eventQueue:
+	go func() {
+		for {
+			evt := <-a.eventQueue
 			switch evt.Type {
 			case termbox.EventKey:
 				a.selector.keyPress(evt)
@@ -96,6 +94,12 @@ func (a *App) eventLoop(stop chan struct{}) {
 				}
 				a.selector.resize(evt.Width, evt.Height)
 			}
+		}
+	}()
+	for {
+		select {
+		case <-stop:
+			return
 		default:
 			a.eventQueue <- termbox.PollEvent()
 		}
@@ -189,6 +193,7 @@ func (a *App) chooseObject() error {
 	case selected.dir:
 		a.object = ""
 		a.prefix = append(a.prefix, selected.key)
+		logger.log("Directory selected" + selected.key)
 	default:
 		a.object = selected.key
 		if isEnd, err := a.objectAction(); err != nil {

@@ -5,6 +5,7 @@ import (
 	"github.com/nsf/termbox-go"
 	"math"
 	"strings"
+	"sync"
 )
 
 type Selector struct {
@@ -14,6 +15,7 @@ type Selector struct {
 	interrupt    chan error
 	width        int
 	height       int
+	mutex        *sync.Mutex
 
 	status *Status
 
@@ -30,6 +32,7 @@ func NewSelector(rowOffset int, status *Status) *Selector {
 		interrupt:    make(chan error, 1),
 		width:        width,
 		height:       height,
+		mutex:        new(sync.Mutex),
 
 		status: status,
 
@@ -44,7 +47,7 @@ func (s *Selector) WithOutFilter() *Selector {
 }
 
 func (s *Selector) WithFilter() *Selector {
-	s.enableFilter = false
+	s.enableFilter = true
 	return s
 }
 
@@ -97,6 +100,7 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 	for {
 		select {
 		case evt := <-s.onKeyPress:
+			s.mutex.Lock()
 			switch {
 			case evt.Key == termbox.KeyCtrlC:
 				fallthrough
@@ -145,6 +149,7 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 				index, err := s.getFilteredIndex(list, filters, page, pointer)
 				selected <- index
 				errChan <- err
+				s.mutex.Unlock()
 				return
 			case s.enableFilter && evt.Key == termbox.KeyBackspace2:
 				if len(filters) > 0 {
@@ -155,6 +160,7 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 				filters = append(filters, evt.Ch)
 				listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 			}
+			s.mutex.Unlock()
 		case <-s.onResize:
 			listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 		}
