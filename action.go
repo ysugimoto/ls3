@@ -28,25 +28,38 @@ type Action struct {
 	// Status Writer
 	status *Status
 
+	selector *Selector
+
 	// Object name
 	name string
 
 	// row offset for termbox
 	offset int
+
+	guard chan struct{}
+
+	pointer int
 }
 
 // Create Action pointer
-func NewAction(object *s3.GetObjectOutput, objectName string, offset int) *Action {
+func NewAction(object *s3.GetObjectOutput, objectName string, selector *Selector, status *Status, offset int) *Action {
 	return &Action{
-		object: object,
-		name:   objectName,
-		offset: offset,
-		status: NewStatus(1),
+		object:   object,
+		name:     objectName,
+		offset:   offset,
+		selector: selector,
+		status:   status,
+		guard:    make(chan struct{}, 1),
 	}
 }
 
 // Do action
 func (a *Action) Do() (bool, error) {
+	a.guard <- struct{}{}
+	defer func() {
+		<-a.guard
+	}()
+
 	pointer := a.displayObjectInfo()
 	a.status.Message("Choose Action for this file", 0)
 	var act ObjectAction
@@ -67,6 +80,12 @@ func (a *Action) Do() (bool, error) {
 	case Back, None:
 	}
 	return false, nil
+}
+
+func (a *Action) resize() {
+	if len(a.guard) > 0 {
+		a.displayObjectInfo()
+	}
 }
 
 // Display object info
@@ -101,8 +120,12 @@ func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
 	// }
 	actions = append(actions, download)
 
-	selector := NewSelector(pointer).WithOutFilter()
-	action, err := selector.Choose(actions.Selectable())
+	a.selector.SetOffset(pointer).WithOutFilter()
+	defer func() {
+		a.selector.SetOffset(a.offset).WithFilter()
+	}()
+
+	action, err := a.selector.Choose(actions.Selectable())
 	if err != nil {
 		return None, err
 	}

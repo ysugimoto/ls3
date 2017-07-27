@@ -11,22 +11,30 @@ type Selector struct {
 	offset       int
 	enableFilter bool
 	guard        chan struct{}
-	eventQueue   chan termbox.Event
-	keyEvent     chan termbox.Event
-	resizeEvent  chan termbox.Event
 	interrupt    chan error
+	width        int
+	height       int
+
+	status *Status
+
+	onResize   chan struct{}
+	onKeyPress chan termbox.Event
 }
 
-func NewSelector(rowOffset int) *Selector {
+func NewSelector(rowOffset int, status *Status) *Selector {
+	width, height := termbox.Size()
 	return &Selector{
 		offset:       rowOffset,
 		enableFilter: true,
+		guard:        make(chan struct{}, 1),
+		interrupt:    make(chan error, 1),
+		width:        width,
+		height:       height,
 
-		guard:       make(chan struct{}, 1),
-		eventQueue:  make(chan termbox.Event, 1),
-		keyEvent:    make(chan termbox.Event, 1),
-		resizeEvent: make(chan termbox.Event, 1),
-		interrupt:   make(chan error, 1),
+		status: status,
+
+		onResize:   make(chan struct{}, 1),
+		onKeyPress: make(chan termbox.Event, 1),
 	}
 }
 
@@ -35,8 +43,29 @@ func (s *Selector) WithOutFilter() *Selector {
 	return s
 }
 
-func (s *Selector) SetOffset(offset int) {
+func (s *Selector) WithFilter() *Selector {
+	s.enableFilter = false
+	return s
+}
+
+func (s *Selector) keyPress(evt termbox.Event) {
+	if len(s.guard) > 0 {
+		s.onKeyPress <- evt
+	}
+}
+
+func (s *Selector) resize(width, height int) {
+	s.width = width
+	s.height = height
+
+	if len(s.guard) > 0 {
+		s.onResize <- struct{}{}
+	}
+}
+
+func (s *Selector) SetOffset(offset int) *Selector {
 	s.offset = offset
+	return s
 }
 
 func (s *Selector) Choose(list Selectable) (int, error) {
@@ -48,22 +77,10 @@ func (s *Selector) Choose(list Selectable) (int, error) {
 
 	selected := make(chan int, 1)
 	errChan := make(chan error, 1)
-	stopPoll := make(chan struct{}, 1)
 	go s.control(list, selected, errChan)
-	go func() {
-		for {
-			select {
-			case <-stopPoll:
-				return
-			default:
-				s.eventQueue <- termbox.PollEvent()
-			}
-		}
-	}()
 
 	index := <-selected
 	err := <-errChan
-	stopPoll <- struct{}{}
 	return index, err
 }
 
@@ -78,9 +95,8 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 	listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 
 	for {
-		evt := <-s.eventQueue
-		switch evt.Type {
-		case termbox.EventKey:
+		select {
+		case evt := <-s.onKeyPress:
 			switch {
 			case evt.Key == termbox.KeyCtrlC:
 				fallthrough
@@ -139,7 +155,7 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 				filters = append(filters, evt.Ch)
 				listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 			}
-		case termbox.EventResize:
+		case <-s.onResize:
 			listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 		}
 	}
@@ -183,15 +199,14 @@ func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) 
 	if len(filtered) == 0 {
 		return 0, 1, 0, 0
 	}
-	_, height := termbox.Size()
-	maxPage := int(math.Ceil(float64(len(filtered)) / float64(height)))
+	maxPage := int(math.Ceil(float64(len(filtered)) / float64(s.height)))
 	if page > maxPage {
 		page = 1
 	} else if page < 1 {
 		page = maxPage
 	}
-	start := (page - 1) * (height - s.offset)
-	end := start + (height - s.offset)
+	start := (page - 1) * (s.height - s.offset)
+	end := start + (s.height - s.offset)
 	if end > len(filtered) {
 		end = len(filtered)
 	}
@@ -206,29 +221,18 @@ func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) 
 			pointerFound = pointer
 		}
 	}
-	s.displayInfo(len(filtered), page, maxPage)
-	termbox.Flush()
 	if s.enableFilter {
-		status := NewStatus(1)
-		status.Message(fmt.Sprintf("Filter query> %s", string(filters)), 0)
+		s.displayInfo(len(filtered), page, maxPage)
+		s.status.Message(fmt.Sprintf("Filter query> %s", string(filters)), 0)
 	}
+	termbox.Flush()
+
 	return len(displayList), page, maxPage, pointerFound
 }
 
 func (s *Selector) displayInfo(listLen, page, maxPage int) {
 	info := []rune(fmt.Sprintf("(Total %d: %d of %d)", listLen, page, maxPage))
-	w, _ := termbox.Size()
-
-	// clear heading cells (this process is fragile...)
-	cb := termbox.CellBuffer()
-	headColor := termbox.ColorGreen | termbox.AttrBold
-	for i := 0; i < w; i++ {
-		if cb[i].Fg != headColor {
-			cb[i].Ch = ' '
-		}
-	}
-
-	x := w - len(info)
+	x := s.width - len(info)
 	for _, r := range info {
 		termbox.SetCell(x, 0, r, termbox.ColorDefault, termbox.ColorDefault)
 		x++
@@ -236,19 +240,17 @@ func (s *Selector) displayInfo(listLen, page, maxPage int) {
 }
 
 func (s *Selector) Clear() {
-	width, height := termbox.Size()
-	for i := s.offset; i < height; i++ {
-		for j := 0; j < width; j++ {
+	for i := s.offset; i < s.height; i++ {
+		for j := 0; j < s.width; j++ {
 			termbox.SetCell(j, i, rune(' '), termbox.ColorDefault, termbox.ColorDefault)
 		}
 	}
 }
 
 func (s *Selector) inactive(pointer int) {
-	width, _ := termbox.Size()
-	index := (pointer + s.offset) * width
+	index := (pointer + s.offset) * s.width
 	cb := termbox.CellBuffer()
-	for i := 0; i < width; i++ {
+	for i := 0; i < s.width; i++ {
 		cell := cb[index+i]
 		cell.Bg = termbox.ColorDefault
 		cb[index+i] = cell
@@ -256,33 +258,11 @@ func (s *Selector) inactive(pointer int) {
 }
 
 func (s *Selector) active(pointer int) {
-	width, _ := termbox.Size()
-	index := (pointer + s.offset) * width
+	index := (pointer + s.offset) * s.width
 	cb := termbox.CellBuffer()
-	for i := 0; i < width; i++ {
+	for i := 0; i < s.width; i++ {
 		cell := cb[index+i]
 		cell.Bg = termbox.ColorMagenta
 		cb[index+i] = cell
-	}
-}
-
-func (s *Selector) pollEvent() {
-	for {
-		switch evt := termbox.PollEvent(); evt.Type {
-		case termbox.EventKey:
-			if evt.Key == termbox.KeyCtrlC || evt.Key == termbox.KeyEsc {
-				if len(s.guard) > 0 {
-					s.interrupt <- fmt.Errorf("interrupted")
-				}
-				return
-			}
-			if len(s.guard) > 0 {
-				s.keyEvent <- evt
-			}
-		case termbox.EventResize:
-			if len(s.guard) > 0 {
-				s.resizeEvent <- evt
-			}
-		}
 	}
 }

@@ -25,6 +25,13 @@ type App struct {
 
 	// Status writer
 	status *Status
+
+	// Selector
+	selector *Selector
+
+	action *Action
+
+	eventQueue chan termbox.Event
 }
 
 // Create new application
@@ -32,12 +39,15 @@ func NewApp(service *s3.S3, bucket string) (*App, error) {
 	if err := termbox.Init(); err != nil {
 		return nil, err
 	}
-	return &App{
-		service: service,
-		bucket:  bucket,
-		prefix:  []string{},
-		status:  NewStatus(1),
-	}, nil
+	app := &App{
+		service:    service,
+		bucket:     bucket,
+		prefix:     []string{},
+		eventQueue: make(chan termbox.Event, 1),
+	}
+	app.status = NewStatus(1)
+	app.selector = NewSelector(2, app.status)
+	return app, nil
 }
 
 // Terminate application
@@ -49,6 +59,11 @@ func (a *App) Terminate() {
 func (a *App) Run() error {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
+	stop := make(chan struct{}, 1)
+	defer func() {
+		stop <- struct{}{}
+	}()
+	go a.eventLoop(stop)
 
 	if a.bucket == "" {
 		if err := a.chooseBuckets(); err != nil {
@@ -61,6 +76,30 @@ func (a *App) Run() error {
 
 	// successfully ended application
 	return nil
+}
+
+func (a *App) eventLoop(stop chan struct{}) {
+	for {
+		select {
+		case <-stop:
+			return
+		case evt := <-a.eventQueue:
+			switch evt.Type {
+			case termbox.EventKey:
+				a.selector.keyPress(evt)
+			case termbox.EventResize:
+				termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+				a.writeHeader()
+				a.status.resize(evt.Width, evt.Height)
+				if a.action != nil {
+					a.action.resize()
+				}
+				a.selector.resize(evt.Width, evt.Height)
+			}
+		default:
+			a.eventQueue <- termbox.PollEvent()
+		}
+	}
 }
 
 // Write application header
@@ -79,7 +118,6 @@ func (a *App) writeHeader() {
 	for i, r := range []rune(location) {
 		termbox.SetCell(i, 0, r, termbox.ColorGreen|termbox.AttrBold, termbox.ColorDefault)
 	}
-	termbox.Flush()
 }
 
 // Choose bucket from list
@@ -97,8 +135,7 @@ func (a *App) chooseBuckets() error {
 	a.writeHeader()
 
 	a.status.Message("Choose bucket", 0)
-	selector := NewSelector(2)
-	index, err := selector.Choose(buckets.Selectable())
+	index, err := a.selector.Choose(buckets.Selectable())
 	if err != nil {
 		a.status.Clear()
 		return err
@@ -110,6 +147,7 @@ func (a *App) chooseBuckets() error {
 
 // Choose from object list
 func (a *App) chooseObject() error {
+	a.object = ""
 	input := &s3.ListObjectsInput{
 		Bucket: aws.String(a.bucket),
 	}
@@ -130,8 +168,7 @@ func (a *App) chooseObject() error {
 	a.writeHeader()
 
 	a.status.Message("Choose object", 0)
-	selector := NewSelector(2)
-	index, err := selector.Choose(objects.Selectable())
+	index, err := a.selector.Choose(objects.Selectable())
 	if err != nil {
 		a.status.Clear()
 		return err
@@ -180,8 +217,11 @@ func (a *App) objectAction() (bool, error) {
 
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	a.writeHeader()
-	action := NewAction(result, a.object, 2)
-	return action.Do()
+	a.action = NewAction(result, a.object, a.selector, a.status, 2)
+	defer func() {
+		a.action = nil
+	}()
+	return a.action.Do()
 }
 
 // Filter and format object list
