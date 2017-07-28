@@ -116,6 +116,7 @@ func main() {
 	}()
 
 	if err := app.Run(); err != nil {
+		logger.log(err.Error())
 		app.Terminate()
 		os.Exit(1)
 	}

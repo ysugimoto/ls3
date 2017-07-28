@@ -100,11 +100,14 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 	for {
 		select {
 		case evt := <-s.onKeyPress:
+			logger.log("Handle keypress")
 			s.mutex.Lock()
 			switch {
 			case evt.Key == termbox.KeyCtrlC:
+				logger.log("Press Ctrl+C")
 				fallthrough
 			case evt.Key == termbox.KeyEsc:
+				logger.log("Press Esc")
 				selected <- 0
 				errChan <- fmt.Errorf("interrupted")
 
@@ -116,7 +119,6 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 					s.active(pointer)
 					termbox.Flush()
 				} else if maxPage > 1 {
-					logger.log(fmt.Sprintf("Paging. poiner: %d", pointer))
 					s.inactive(pointer)
 					pointer = 0
 					s.active(pointer)
@@ -140,23 +142,25 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 						s.inactive(pointer)
 						_, h := termbox.Size()
 						pointer = h - s.offset - 1
-						logger.log(fmt.Sprintf("Paging. poiner: %d", pointer))
 						s.active(pointer)
 						listSize, page, maxPage, pointer = s.display(list, filters, page-1, pointer)
 					}
 				}
 			case evt.Key == termbox.KeyEnter:
+				logger.log("Press Enter")
 				index, err := s.getFilteredIndex(list, filters, page, pointer)
 				selected <- index
 				errChan <- err
 				s.mutex.Unlock()
 				return
 			case s.enableFilter && evt.Key == termbox.KeyBackspace2:
+				logger.log("Press BS")
 				if len(filters) > 0 {
 					filters = filters[0 : len(filters)-1]
 					listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 				}
 			case s.enableFilter && evt.Ch > 0:
+				logger.log("Press " + string(evt.Ch))
 				filters = append(filters, evt.Ch)
 				listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 			}
@@ -169,8 +173,7 @@ func (s *Selector) control(list Selectable, selected chan int, errChan chan erro
 
 func (s *Selector) getFilteredIndex(list Selectable, filters []rune, page, pointer int) (int, error) {
 	_, indexMap := s.filterList(list, filters)
-	_, height := termbox.Size()
-	index := (page-1)*height + pointer
+	index := (page-1)*s.height + pointer
 
 	if indexMap == nil {
 		return index, nil
@@ -201,10 +204,8 @@ func (s *Selector) filterList(list Selectable, filters []rune) (Selectable, map[
 }
 
 func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) (int, int, int, int) {
+	s.Clear()
 	filtered, _ := s.filterList(lines, filters)
-	if len(filtered) == 0 {
-		return 0, 1, 0, 0
-	}
 	maxPage := int(math.Ceil(float64(len(filtered)) / float64(s.height)))
 	if page > maxPage {
 		page = 1
@@ -217,7 +218,6 @@ func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) 
 		end = len(filtered)
 	}
 	displayList := filtered[start:end]
-	s.Clear()
 	pointerFound := 0
 	strFilter := string(filters)
 	for i, line := range displayList {
@@ -239,6 +239,11 @@ func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) 
 func (s *Selector) displayInfo(listLen, page, maxPage int) {
 	info := []rune(fmt.Sprintf("(Total %d: %d of %d)", listLen, page, maxPage))
 	x := s.width - len(info)
+
+	// This is fragile...
+	for i := x - 10; i < x; i++ {
+		termbox.SetCell(i, 0, ' ', termbox.ColorDefault, termbox.ColorDefault)
+	}
 	for _, r := range info {
 		termbox.SetCell(x, 0, r, termbox.ColorDefault, termbox.ColorDefault)
 		x++
