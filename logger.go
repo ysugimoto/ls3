@@ -44,7 +44,7 @@ func init() {
 	}
 
 	cwd, _ := os.Getwd()
-	fp, err := os.OpenFile(cwd+"/app.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	fp, err := os.OpenFile(cwd+"/ls3.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		panic(err)
 	}
