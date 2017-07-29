@@ -1,5 +1,7 @@
 # ls3 : AWS S3 file explorer on CLI
 
+![Working example](https://s3-ap-northeast-1.amazonaws.com/sugimoto/blog-images/ls3-example.gif)
+
 ## Installation
 
 ```
