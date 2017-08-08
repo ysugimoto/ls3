@@ -25,7 +25,7 @@ func (l *Logger) Close() {
 
 // logWritable::log implementation
 func (l *Logger) log(message string) {
-	now := time.Now().Format("2006-01-02 15:03:04")
+	now := time.Now().Format("2006-01-02 15:04:05")
 	l.fp.WriteString(now + " " + message + "\n")
 }
 
