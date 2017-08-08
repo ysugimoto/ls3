@@ -26,12 +26,11 @@ type App struct {
 	// Status writer
 	status *Status
 
-	// Selector
+	// Selector instance
 	selector *Selector
 
+	// Action instance
 	action *Action
-
-	eventQueue chan termbox.Event
 }
 
 // Create new application
@@ -40,10 +39,9 @@ func NewApp(service *s3.S3, bucket string) (*App, error) {
 		return nil, err
 	}
 	app := &App{
-		service:    service,
-		bucket:     bucket,
-		prefix:     []string{},
-		eventQueue: make(chan termbox.Event, 1),
+		service: service,
+		bucket:  bucket,
+		prefix:  []string{},
 	}
 	app.status = NewStatus(1)
 	app.selector = NewSelector(2, app.status)
@@ -55,10 +53,17 @@ func (a *App) Terminate() {
 	termbox.Close()
 }
 
+// Clear the termbox
+func (a *App) Clear() {
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+}
+
 // Run application
 func (a *App) Run() error {
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	a.Clear()
 	a.writeHeader()
+
+	// Observe termbox events in goroutine
 	stop := make(chan struct{}, 1)
 	go a.eventLoop(stop)
 
@@ -79,14 +84,18 @@ func (a *App) Run() error {
 }
 
 func (a *App) eventLoop(stop chan struct{}) {
+	queue := make(chan termbox.Event, 1)
 	go func() {
 		for {
-			evt := <-a.eventQueue
+			evt := <-queue
 			switch evt.Type {
 			case termbox.EventKey:
+				logger.log("termbox keyEvent handled")
+				// Send key event to selector
 				a.selector.keyPress(evt)
 			case termbox.EventResize:
-				termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+				logger.log("termbox resizeEvent handled")
+				a.Clear()
 				a.writeHeader()
 				a.status.resize(evt.Width, evt.Height)
 				if a.action != nil {
@@ -101,7 +110,7 @@ func (a *App) eventLoop(stop chan struct{}) {
 		case <-stop:
 			return
 		default:
-			a.eventQueue <- termbox.PollEvent()
+			queue <- termbox.PollEvent()
 		}
 	}
 }
@@ -126,7 +135,7 @@ func (a *App) writeHeader() {
 
 // Choose bucket from list
 func (a *App) chooseBuckets() error {
-	a.status.Message("Retrive bucket list...", 0)
+	a.status.Message("Retriving bucket list...", 0)
 	result, err := a.service.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
 		return err
@@ -135,18 +144,18 @@ func (a *App) chooseBuckets() error {
 	for _, b := range result.Buckets {
 		buckets = append(buckets, NewBucket(b))
 	}
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	a.Clear()
 	a.writeHeader()
 
 	a.status.Message("Choose bucket", 0)
 	index, err := a.selector.Choose(buckets.Selectable())
 	if err != nil {
 		a.status.Clear()
-		return err
+	} else {
+		a.status.Clear()
+		a.bucket = buckets[index].name
 	}
-	a.status.Clear()
-	a.bucket = buckets[index].name
-	return nil
+	return err
 }
 
 // Choose from object list
@@ -158,7 +167,7 @@ func (a *App) chooseObject() error {
 	if len(a.prefix) > 0 {
 		input = input.SetPrefix(strings.Join(a.prefix, "/") + "/")
 	}
-	a.status.Message("Retrive object list...", 0)
+	a.status.Message("Retriving object list...", 0)
 	result, err := a.service.ListObjects(input)
 	if err != nil {
 		return err
@@ -168,7 +177,7 @@ func (a *App) chooseObject() error {
 		objects = append(objects, o)
 	}
 
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	a.Clear()
 	a.writeHeader()
 
 	a.status.Message("Choose object", 0)
@@ -177,11 +186,13 @@ func (a *App) chooseObject() error {
 		a.status.Clear()
 		return err
 	}
+
 	a.status.Clear()
 	selected := objects[index]
 	switch {
-	case selected.key == "../":
+	case selected.key == "../": // selcted parent directory
 		a.object = ""
+		// if prefix is empty, back to choose bucket
 		if len(a.prefix) == 0 {
 			a.bucket = ""
 			if err := a.chooseBuckets(); err != nil {
@@ -220,7 +231,7 @@ func (a *App) objectAction() (bool, error) {
 		return true, err
 	}
 
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	a.Clear()
 	a.writeHeader()
 	a.action = NewAction(result, a.object, a.selector, a.status, 2)
 	defer func() {
@@ -230,12 +241,12 @@ func (a *App) objectAction() (bool, error) {
 }
 
 // Filter and format object list
-func formatObjects(s3Objects []*s3.Object, prefix []string) []*Object {
+func formatObjects(s3Objects []*s3.Object, prefix []string) Objects {
 	replace := ""
 	if len(prefix) > 0 {
 		replace = strings.Join(prefix, "/") + "/"
 	}
-	objects := []*Object{}
+	objects := Objects{}
 	unique := map[string]struct{}{}
 	for _, o := range s3Objects {
 		isDir := false

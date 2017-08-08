@@ -61,11 +61,13 @@ func (o *Object) String() string {
 // Writer::Write implementation
 func (o *Object) Write(y int, filter string) {
 	i := 0
+	// parent directory, write "../"
 	if o.parent {
 		for _, r := range []rune(o.key) {
 			termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorBlue)
 			i++
 		}
+		// Write as directory
 	} else if o.dir {
 		for _, r := range []rune(utcToJst(o.lastModified)) {
 			termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
@@ -85,6 +87,7 @@ func (o *Object) Write(y int, filter string) {
 			termbox.SetCell(i, y, r, color|termbox.AttrBold, termbox.ColorDefault)
 			i += runewidth.RuneWidth(r)
 		}
+		// Write as object
 	} else {
 		for _, r := range []rune(utcToJst(o.lastModified)) {
 			termbox.SetCell(i, y, r, termbox.ColorWhite, termbox.ColorDefault)
