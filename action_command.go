@@ -9,7 +9,6 @@ type ObjectAction int
 
 const (
 	Back ObjectAction = iota
-	View
 	Download
 	None = 999
 )

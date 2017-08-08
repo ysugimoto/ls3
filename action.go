@@ -11,14 +11,6 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-// Enable to view file content MimeTypes
-var mimeTypeList = map[string]int{
-	"text/plain":             1,
-	"text/html":              1,
-	"text/css":               1,
-	"application/javascript": 1,
-}
-
 // Action for S3 object
 type Action struct {
 
@@ -28,6 +20,7 @@ type Action struct {
 	// Status Writer
 	status *Status
 
+	// Injected Selector
 	selector *Selector
 
 	// Object name
@@ -36,9 +29,8 @@ type Action struct {
 	// row offset for termbox
 	offset int
 
+	// Duplicate guard
 	guard chan struct{}
-
-	pointer int
 }
 
 // Create Action pointer
@@ -62,24 +54,15 @@ func (a *Action) Do() (bool, error) {
 
 	pointer := a.displayObjectInfo()
 	a.status.Message("Choose Action for this file", 0)
-	var act ObjectAction
-	for {
-		var err error
-		act, err = a.chooseAction(pointer)
-		if err != nil {
-			continue
-		}
-		break
-	}
-	switch act {
+
+	switch a.chooseAction(pointer) {
 	case Download:
 		return a.doDownload()
-	case View:
-		break
-		// return a.doView()
 	case Back, None:
+		return false, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (a *Action) resize() {
@@ -91,7 +74,7 @@ func (a *Action) resize() {
 // Display object info
 func (a *Action) displayObjectInfo() (pointer int) {
 	pointer = a.offset
-	infoList := []string{
+	infoList := [6]string{
 		"",
 		fmt.Sprint(strings.Repeat("=", 60)),
 		fmt.Sprintf("%-16s: %s\n", "Content Type", *a.object.ContentType),
@@ -109,38 +92,25 @@ func (a *Action) displayObjectInfo() (pointer int) {
 }
 
 // Choose action for selected object
-func (a *Action) chooseAction(pointer int) (ObjectAction, error) {
+func (a *Action) chooseAction(pointer int) ObjectAction {
 	back := ActionCommand{op: Back, name: "Back To List"}
-	// view := ActionCommand{op: View, name: "View file content"}
 	download := ActionCommand{op: Download, name: "Download this file"}
 
-	actions := ActionList{back}
-	// if _, ok := mimeTypeList[*a.object.ContentType]; ok {
-	// 	actions = append(actions, view)
-	// }
-	actions = append(actions, download)
+	actions := ActionList{back, download}
 
 	a.selector.SetOffset(pointer).WithOutFilter()
 	defer func() {
 		a.selector.SetOffset(a.offset).WithFilter()
 	}()
 
-	action, err := a.selector.Choose(actions.Selectable())
-	if err != nil {
-		return None, err
-	}
+	action, _ := a.selector.Choose(actions.Selectable())
 	switch action {
 	case 0:
-		return Back, nil
-	case 1:
-		if _, ok := mimeTypeList[*a.object.ContentType]; ok {
-			return View, nil
-		}
-		return Download, nil
+		return Back
 	case 2:
-		return Download, nil
+		return Download
 	default:
-		return None, nil
+		return None
 	}
 }
 
@@ -158,11 +128,8 @@ func (a *Action) doDownload() (bool, error) {
 		<-a.status.Error("Failed to download", 1)
 		return false, err
 	}
-	<-a.status.Info("Downloaded completely!", 2)
+	go func() {
+		<-a.status.Info("Downloaded completely!", 1)
+	}()
 	return false, nil
 }
-
-// Currently not implemented
-// func (a *Action) doView() (bool, error) {
-// 	return true, nil
-// }

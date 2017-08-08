@@ -8,55 +8,73 @@ import (
 	"sync"
 )
 
+// Selectable items struct
 type Selector struct {
-	offset       int
-	enableFilter bool
-	guard        chan struct{}
-	interrupt    chan error
-	width        int
-	height       int
-	mutex        *sync.Mutex
 
+	// Row offset
+	offset int
+
+	// Flag of incremental search
+	enableFilter bool
+
+	// Duplicate guard
+	guard chan struct{}
+
+	// Screen width
+	width int
+
+	// Screen height
+	height int
+
+	// Key handling mutex
+	mutex *sync.Mutex
+
+	// DI: status struct
 	status *Status
 
-	onResize   chan struct{}
+	// Resize channel
+	onResize chan struct{}
+
+	// Key event channel
 	onKeyPress chan termbox.Event
 }
 
+// Struct pointer maker
 func NewSelector(rowOffset int, status *Status) *Selector {
 	width, height := termbox.Size()
 	return &Selector{
 		offset:       rowOffset,
 		enableFilter: true,
 		guard:        make(chan struct{}, 1),
-		interrupt:    make(chan error, 1),
 		width:        width,
 		height:       height,
 		mutex:        new(sync.Mutex),
-
-		status: status,
-
-		onResize:   make(chan struct{}, 1),
-		onKeyPress: make(chan termbox.Event, 1),
+		status:       status,
+		onResize:     make(chan struct{}, 1),
+		onKeyPress:   make(chan termbox.Event, 1),
 	}
 }
 
+// Switch disabling filter
 func (s *Selector) WithOutFilter() *Selector {
 	s.enableFilter = false
 	return s
 }
 
+// Switch enabling filter
 func (s *Selector) WithFilter() *Selector {
 	s.enableFilter = true
 	return s
 }
 
+// Pre handle keyPress event from App
 func (s *Selector) keyPress(evt termbox.Event) {
 	if len(s.guard) > 0 {
 		s.onKeyPress <- evt
 	}
 }
 
+// Pre handle resize event from App
 func (s *Selector) resize(width, height int) {
 	s.width = width
 	s.height = height
@@ -66,11 +84,13 @@ func (s *Selector) resize(width, height int) {
 	}
 }
 
+// Change row offset
 func (s *Selector) SetOffset(offset int) *Selector {
 	s.offset = offset
 	return s
 }
 
+// Choose item from selectable list
 func (s *Selector) Choose(list Selectable) (int, error) {
 	s.guard <- struct{}{}
 
@@ -78,102 +98,98 @@ func (s *Selector) Choose(list Selectable) (int, error) {
 		<-s.guard
 	}()
 
+	// start select
 	selected := make(chan int, 1)
 	errChan := make(chan error, 1)
-	go s.control(list, selected, errChan)
+	go s.doSelect(list, selected, errChan)
 
-	index := <-selected
-	err := <-errChan
-	return index, err
+	return <-selected, <-errChan
 }
 
-func (s *Selector) control(list Selectable, selected chan int, errChan chan error) {
-	var (
-		pointer  int = 0
-		page     int = 1
-		listSize int
-		maxPage  int
-		filters  []rune = []rune{}
-	)
-	listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
+func (s *Selector) doSelect(list Selectable, selected chan int, errChan chan error) {
+	state := NewSelectorState(list)
+	s.display(state)
 
 	for {
 		select {
+
+		// Handle resize event
+		case <-s.onResize:
+			s.display(state)
+
+		// Handle key event
 		case evt := <-s.onKeyPress:
 			logger.log("Handle keypress")
 			s.mutex.Lock()
 			switch {
-			case evt.Key == termbox.KeyCtrlC:
-				logger.log("Press Ctrl+C")
-				fallthrough
-			case evt.Key == termbox.KeyEsc:
-				logger.log("Press Esc")
+
+			// Pressed Ctrl+C or Esc
+			case evt.Key == termbox.KeyCtrlC || evt.Key == termbox.KeyEsc:
 				selected <- 0
 				errChan <- fmt.Errorf("interrupted")
 
+			// Pressed Arrow-Down key
 			case evt.Key == termbox.KeyArrowDown:
-				if pointer+1 < listSize {
-					logger.log("Down cursor")
-					s.inactive(pointer)
-					pointer++
-					s.active(pointer)
-					termbox.Flush()
-				} else if maxPage > 1 {
-					s.inactive(pointer)
-					pointer = 0
-					s.active(pointer)
-					listSize, page, maxPage, pointer = s.display(list, filters, page+1, pointer)
+				old, updated, paging := state.DownCursor(1)
+				logger.log("Down cursor")
+				s.inactive(old)
+				s.active(updated)
+				if paging {
+					s.display(state)
 				}
+				termbox.Flush()
+
+			// Pressed Arrow-Up key
 			case evt.Key == termbox.KeyArrowUp:
-				if pointer-1 >= 0 {
-					logger.log("Up cursor")
-					s.inactive(pointer)
-					pointer--
-					s.active(pointer)
-					termbox.Flush()
-				} else if maxPage > 1 {
-					if page == 1 { // back from first to last
-						listSize, page, maxPage, pointer = s.display(list, filters, page-1, pointer)
-						s.inactive(pointer)
-						pointer = listSize - 1
-						s.active(pointer)
-						termbox.Flush()
+				old, updated, paging := state.UpCursor(1)
+				logger.log("Up cursor")
+				s.inactive(old)
+				if paging {
+					if updated == -1 {
+						s.display(state)
+						state.pointer = state.listSize - 1
+						s.active(state.pointer)
 					} else {
-						s.inactive(pointer)
-						_, h := termbox.Size()
-						pointer = h - s.offset - 1
-						s.active(pointer)
-						listSize, page, maxPage, pointer = s.display(list, filters, page-1, pointer)
+						state.pointer = s.height - s.offset - 1
+						s.active(state.pointer)
+						s.display(state)
 					}
+				} else {
+					s.active(updated)
 				}
+				termbox.Flush()
+
+			// Pressed Enter key
 			case evt.Key == termbox.KeyEnter:
 				logger.log("Press Enter")
-				index, err := s.getFilteredIndex(list, filters, page, pointer)
+				index, err := s.getFilteredIndex(state)
 				selected <- index
 				errChan <- err
 				s.mutex.Unlock()
 				return
+
+			// Pressed Backspace
 			case s.enableFilter && evt.Key == termbox.KeyBackspace2:
-				logger.log("Press BS")
-				if len(filters) > 0 {
-					filters = filters[0 : len(filters)-1]
-					listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
+				logger.log("Press Backspace")
+				if update := state.popFilter(); update {
+					s.display(state)
 				}
+
+			// Other character key
 			case s.enableFilter && evt.Ch > 0:
 				logger.log("Press " + string(evt.Ch))
-				filters = append(filters, evt.Ch)
-				listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
+				state.addFilter(evt.Ch)
+				s.display(state)
 			}
 			s.mutex.Unlock()
-		case <-s.onResize:
-			listSize, page, maxPage, pointer = s.display(list, filters, page, pointer)
 		}
 	}
 }
 
-func (s *Selector) getFilteredIndex(list Selectable, filters []rune, page, pointer int) (int, error) {
-	_, indexMap := s.filterList(list, filters)
-	index := (page-1)*s.height + pointer
+// Get selected item considering with filter query
+func (s *Selector) getFilteredIndex(state *SelectorState) (int, error) {
+	_, indexMap := s.filterList(state)
+	index := (state.page-1)*s.height + state.pointer
 
 	if indexMap == nil {
 		return index, nil
@@ -185,15 +201,17 @@ func (s *Selector) getFilteredIndex(list Selectable, filters []rune, page, point
 	}
 }
 
-func (s *Selector) filterList(list Selectable, filters []rune) (Selectable, map[int]int) {
-	if len(filters) == 0 {
-		return list, nil
+// Filter list items by input query, and returns list and indexed map
+func (s *Selector) filterList(state *SelectorState) (Selectable, map[int]int) {
+	if len(state.filters) == 0 {
+		return state.items, nil
 	}
-	filter := string(filters)
+	filter := string(state.filters)
 	filtered := Selectable{}
+	// key is filtered index, value is real item index
 	indexMap := make(map[int]int)
 	index := 0
-	for i, v := range list {
+	for i, v := range state.items {
 		if strings.Contains(v.String(), filter) {
 			filtered = append(filtered, v)
 			indexMap[index] = i
@@ -203,44 +221,47 @@ func (s *Selector) filterList(list Selectable, filters []rune) (Selectable, map[
 	return filtered, indexMap
 }
 
-func (s *Selector) display(lines Selectable, filters []rune, page, pointer int) (int, int, int, int) {
+// Display selectable UI
+func (s *Selector) display(state *SelectorState) {
 	s.Clear()
-	filtered, _ := s.filterList(lines, filters)
-	maxPage := int(math.Ceil(float64(len(filtered)) / float64(s.height)))
-	if page > maxPage {
-		page = 1
-	} else if page < 1 {
-		page = maxPage
-	}
-	start := (page - 1) * (s.height - s.offset)
+	// Get filtered list items
+	filtered, _ := s.filterList(state)
+	// Cauclaute max page
+	state.updatePage(int(math.Ceil(float64(len(filtered)) / float64(s.height))))
+	// Calcualte start and end index
+	start := (state.page - 1) * (s.height - s.offset)
 	end := start + (s.height - s.offset)
 	if end > len(filtered) {
 		end = len(filtered)
 	}
+
+	// Slice list per page and write to term
 	displayList := filtered[start:end]
-	pointerFound := 0
-	strFilter := string(filters)
+	strFilter := string(state.filters)
+	state.listSize = 0
+	pointer := 0
 	for i, line := range displayList {
 		line.Write(i+s.offset, strFilter)
-		if pointer == i {
-			s.active(pointer)
-			pointerFound = pointer
+		if state.pointer == i {
+			s.active(state.pointer)
+			pointer = state.pointer
 		}
+		state.listSize++
 	}
+	state.pointer = pointer
 	if s.enableFilter {
-		s.displayInfo(len(filtered), page, maxPage)
-		s.status.Message(fmt.Sprintf("Filter query> %s", string(filters)), 0)
+		s.displayInfo(len(filtered), state.page, state.maxPage)
+		s.status.Message(fmt.Sprintf("Filter query> %s", string(state.filters)), 0)
 	}
 	termbox.Flush()
-
-	return len(displayList), page, maxPage, pointerFound
 }
 
+// Display filtered total item amounts and page / maxPage
 func (s *Selector) displayInfo(listLen, page, maxPage int) {
 	info := []rune(fmt.Sprintf("(Total %d: %d of %d)", listLen, page, maxPage))
 	x := s.width - len(info)
 
-	// This is fragile...
+	// FIXME: This is fragile...
 	for i := x - 10; i < x; i++ {
 		termbox.SetCell(i, 0, ' ', termbox.ColorDefault, termbox.ColorDefault)
 	}
@@ -250,6 +271,7 @@ func (s *Selector) displayInfo(listLen, page, maxPage int) {
 	}
 }
 
+// Clear the termbox buffer only selector drawable indexes
 func (s *Selector) Clear() {
 	for i := s.offset; i < s.height; i++ {
 		for j := 0; j < s.width; j++ {
@@ -258,6 +280,7 @@ func (s *Selector) Clear() {
 	}
 }
 
+// Inactive cursor
 func (s *Selector) inactive(pointer int) {
 	index := (pointer + s.offset) * s.width
 	cb := termbox.CellBuffer()
@@ -268,6 +291,7 @@ func (s *Selector) inactive(pointer int) {
 	}
 }
 
+// Activate cursor
 func (s *Selector) active(pointer int) {
 	index := (pointer + s.offset) * s.width
 	cb := termbox.CellBuffer()
