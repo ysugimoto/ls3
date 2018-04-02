@@ -161,19 +161,35 @@ func (a *App) chooseBuckets() error {
 // Choose from object list
 func (a *App) chooseObject() error {
 	a.object = ""
-	input := &s3.ListObjectsInput{
-		Bucket: aws.String(a.bucket),
-	}
-	if len(a.prefix) > 0 {
-		input = input.SetPrefix(strings.Join(a.prefix, "/") + "/")
-	}
-	a.status.Message("Retriving object list...", 0)
-	result, err := a.service.ListObjects(input)
-	if err != nil {
-		return err
+	var contents []*s3.Object
+	var lastKey string
+	for {
+		input := &s3.ListObjectsV2Input{
+			Bucket:  aws.String(a.bucket),
+			MaxKeys: aws.Int64(10000),
+		}
+		if len(a.prefix) > 0 {
+			input = input.SetPrefix(strings.Join(a.prefix, "/") + "/")
+		}
+		if lastKey != "" {
+			logger.log("Extra fetch after key: " + lastKey)
+			input = input.SetStartAfter(lastKey)
+		}
+		a.status.Message("Retriving object list...", 0)
+		result, err := a.service.ListObjectsV2(input)
+		if err != nil {
+			return err
+		}
+		contents = append(contents, result.Contents...)
+		if *result.IsTruncated == true {
+			logger.log("Output is truncated, need to more fetch...")
+			lastKey = *contents[len(contents)-1].Key
+			continue
+		}
+		break
 	}
 	objects := Objects{NewParentObject()}
-	for _, o := range formatObjects(result.Contents, a.prefix) {
+	for _, o := range formatObjects(contents, a.prefix) {
 		objects = append(objects, o)
 	}
 
