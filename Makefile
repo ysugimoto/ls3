@@ -1,7 +1,7 @@
 .PHONY: archive
 
 default:
-	go build -o dist/ls3 ./*.go
+	GO111MODULE=on go build -o dist/ls3 ./*.go
 
 archive: darwin linux windows
 
